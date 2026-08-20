@@ -14,6 +14,7 @@ from maintenance_service.domain.schedule_diff import diff_window, compact_audit
 from maintenance_service.infrastructure.observability.structured_logging import event
 from maintenance_service.infrastructure.observability.metrics import increment
 from maintenance_service.application.occurrence_service import rebuild_window
+from maintenance_service.application.planning_revision import publish_resource_revision
 
 
 def get_scope(org_key, resource_key):
@@ -71,6 +72,7 @@ def create_window(org_key, resource_key, data):
         committed_revision=revision,
     )
     rebuild_window(window, revision)
+    publish_resource_revision(org, resource, revision)
     increment("calendar.window.created")
     event(
         "calendar.window.created",
@@ -129,6 +131,7 @@ def update_window(org_key, resource_key, window_id, data):
         committed_revision=revision,
     )
     rebuild_window(window, revision)
+    publish_resource_revision(org, resource, revision)
     increment("calendar.window.updated")
     event(
         "calendar.window.updated",
@@ -162,6 +165,7 @@ def add_override(org_key, resource_key, window_id, data):
     window.version += 1
     window.save(update_fields=["version"])
     rebuild_window(window, revision)
+    publish_resource_revision(org, resource, revision)
     increment("calendar.override.created")
     event(
         "calendar.override.created",

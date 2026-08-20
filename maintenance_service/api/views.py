@@ -22,6 +22,12 @@ from maintenance_service.api.response_contracts import (
     window_response,
     availability_response,
 )
+from maintenance_service.application.maintenance_policy_commands import (
+    create_policy,
+    update_policy,
+)
+from maintenance_service.application.maintenance_plan_commands import commit_plan
+from maintenance_service.application.maintenance_impact import maintenance_impact
 
 
 def render(w, r):
@@ -64,3 +70,33 @@ class AvailabilityView(APIView):
                 )
             )
         )
+
+
+class MaintenancePolicyCollectionView(APIView):
+    def post(self, request, organization):
+        return Response(
+            create_policy(organization, safe_payload(request.data)),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class MaintenancePolicyDetailView(APIView):
+    def patch(self, request, organization, policy_id):
+        return Response(
+            update_policy(
+                organization, policy_id, safe_payload(request.data)
+            )
+        )
+
+
+class MaintenancePlanCollectionView(APIView):
+    def post(self, request, organization):
+        return Response(
+            commit_plan(organization, safe_payload(request.data)),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class MaintenanceImpactView(APIView):
+    def get(self, request, organization):
+        return Response(maintenance_impact(organization, request.query_params))
