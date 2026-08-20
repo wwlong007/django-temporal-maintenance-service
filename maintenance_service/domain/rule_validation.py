@@ -50,6 +50,10 @@ def _integer(value: Any, name: str, minimum: int, maximum: int) -> int:
 
 
 def _timestamp(value: Any, name: str) -> str:
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            raise InvalidSchedule(f"{name} must include a UTC offset")
+        return value.isoformat()
     if not isinstance(value, str) or not value.strip():
         raise InvalidSchedule(f"{name} must be an ISO-8601 timestamp")
     try:
