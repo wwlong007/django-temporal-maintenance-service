@@ -60,7 +60,7 @@ def availability(org_key, resource_key, start_value, end_value, cursor=0):
 def availability_snapshot(org_key, resource_key, params):
     query = parse_query(params)
     projection = ProjectionSnapshotReader().read(
-        org_key, resource_key, query.start, query.end
+        org_key, resource_key, query.start, query.end, query.revision
     )
     snapshot = build_snapshot(projection.rows, query, projection.revision)
     increment("calendar.availability.read")

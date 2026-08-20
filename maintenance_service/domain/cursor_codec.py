@@ -10,6 +10,7 @@ class Cursor:
     offset: int
     start: str
     end: str
+    timezone: str = "UTC"
 
     def __post_init__(self):
         if self.revision < 0 or self.offset < 0:
@@ -21,6 +22,7 @@ class Cursor:
             "offset": self.offset,
             "from": self.start,
             "to": self.end,
+            "timezone": self.timezone,
         }
 
 
@@ -44,26 +46,29 @@ def decode(value):
             int(payload["offset"]),
             str(payload["from"]),
             str(payload["to"]),
+            str(payload.get("timezone", "UTC")),
         )
     except Exception as exc:
         raise InvalidSchedule("cursor is invalid") from exc
 
 
-def verify(value, revision, start, end):
+def verify(value, revision, start, end, timezone="UTC"):
     cursor = decode(value)
     if cursor.revision != revision:
         raise InvalidSchedule("cursor revision is stale")
     if cursor.start != start or cursor.end != end:
         raise InvalidSchedule("cursor belongs to another query")
+    if cursor.timezone != timezone:
+        raise InvalidSchedule("cursor belongs to another timezone")
     return cursor.offset
 
 
-def first_cursor(revision, start, end):
-    return encode(Cursor(revision, 0, start, end))
+def first_cursor(revision, start, end, timezone="UTC"):
+    return encode(Cursor(revision, 0, start, end, timezone))
 
 
-def next_cursor(revision, offset, start, end):
-    return encode(Cursor(revision, offset, start, end))
+def next_cursor(revision, offset, start, end, timezone="UTC"):
+    return encode(Cursor(revision, offset, start, end, timezone))
 
 
 def is_cursor(value):

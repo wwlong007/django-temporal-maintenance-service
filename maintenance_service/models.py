@@ -37,6 +37,7 @@ class MaintenanceWindow(models.Model):
     rule = models.JSONField(default=dict)
     exceptions = models.JSONField(default=dict)
     priority = models.IntegerField(default=0)
+    effective_from = models.DateTimeField()
     version = models.PositiveIntegerField(default=1)
     active = models.BooleanField(default=True)
 
@@ -60,17 +61,57 @@ class Occurrence(models.Model):
     span = DateTimeRangeField(null=True)
 
     class Meta:
+        indexes = [
+            models.Index(
+                fields=["window", "start", "end"], name="occurrence_window_range"
+            )
+        ]
         constraints = [
             models.UniqueConstraint(
-                fields=["window", "start"], name="occurrence_unique_start"
+                fields=["window", "revision", "start"],
+                name="occurrence_revision_unique_start",
             ),
             ExclusionConstraint(
-                name="occurrence_window_overlap",
+                name="occurrence_revision_window_overlap",
                 expressions=[
                     ("window", RangeOperators.EQUAL),
+                    ("revision", RangeOperators.EQUAL),
                     ("span", RangeOperators.OVERLAPS),
                 ],
             ),
+        ]
+
+
+class WindowGeneration(models.Model):
+    window = models.ForeignKey(
+        MaintenanceWindow, on_delete=models.CASCADE, related_name="generations"
+    )
+    effective_from = models.DateTimeField()
+    calendar = models.CharField(max_length=120)
+    timezone = models.CharField(max_length=80)
+    rule = models.JSONField(default=dict)
+    exceptions = models.JSONField(default=dict)
+    priority = models.IntegerField(default=0)
+    active = models.BooleanField(default=True)
+    window_version = models.PositiveIntegerField()
+    committed_revision = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["window", "effective_from"],
+                name="window_generation_effective_from",
+            ),
+            models.UniqueConstraint(
+                fields=["window", "window_version"],
+                name="window_generation_version",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["window", "committed_revision", "effective_from"],
+                name="generation_snapshot_lookup",
+            )
         ]
 
 
@@ -82,6 +123,8 @@ class Override(models.Model):
     action = models.CharField(max_length=20)
     start = models.DateTimeField()
     end = models.DateTimeField()
+    window_version = models.PositiveIntegerField(default=1)
+    committed_revision = models.PositiveIntegerField(default=0)
 
 
 class CalendarRevision(models.Model):

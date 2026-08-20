@@ -8,6 +8,7 @@ class WindowSerializer(serializers.Serializer):
     rule = serializers.DictField(required=False)
     exceptions = serializers.DictField(required=False)
     priority = serializers.IntegerField(required=False)
+    effective_from = serializers.DateTimeField(required=False)
     version = serializers.IntegerField(required=False)
 
 
@@ -18,3 +19,4 @@ class OverrideSerializer(serializers.Serializer):
     start = serializers.DateTimeField()
     end = serializers.DateTimeField()
     original_start = serializers.DateTimeField(required=False)
+    version = serializers.IntegerField()

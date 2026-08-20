@@ -5,6 +5,7 @@ from maintenance_service.models import (
     MaintenanceWindow,
     CalendarRevision,
     Override,
+    WindowGeneration,
 )
 from maintenance_service.domain.errors import VersionConflict
 from maintenance_service.domain.rule_validation import validate_window_payload
@@ -54,8 +55,21 @@ def create_window(org_key, resource_key, data):
         rule=data["rule"],
         exceptions=data.get("exceptions", {}),
         priority=data.get("priority", 0),
+        effective_from=data["effective_from"],
     )
     revision = increment_revision(org, resource)
+    WindowGeneration.objects.create(
+        window=window,
+        effective_from=window.effective_from,
+        calendar=window.calendar,
+        timezone=window.timezone,
+        rule=window.rule,
+        exceptions=window.exceptions,
+        priority=window.priority,
+        active=window.active,
+        window_version=window.version,
+        committed_revision=revision,
+    )
     rebuild_window(window, revision)
     increment("calendar.window.created")
     event(
@@ -84,20 +98,36 @@ def update_window(org_key, resource_key, window_id, data):
             "rule": data.get("rule", window.rule),
             "exceptions": data.get("exceptions", window.exceptions),
             "priority": data.get("priority", window.priority),
+            "effective_from": data["effective_from"],
         }
         data = {**data, **validate_window_payload(candidate)}
     change = diff_window(window, data)
-    if not change.changed:
-        return (
-            window,
-            CalendarRevision.objects.get(organization=org, resource=resource).value,
-        )
-    for field in ("calendar", "timezone", "rule", "exceptions", "priority", "active"):
+    for field in (
+        "calendar",
+        "timezone",
+        "rule",
+        "exceptions",
+        "priority",
+        "active",
+        "effective_from",
+    ):
         if field in data:
             setattr(window, field, data[field])
     window.version += 1
     window.save()
     revision = increment_revision(org, resource)
+    WindowGeneration.objects.create(
+        window=window,
+        effective_from=window.effective_from,
+        calendar=window.calendar,
+        timezone=window.timezone,
+        rule=window.rule,
+        exceptions=window.exceptions,
+        priority=window.priority,
+        active=window.active,
+        window_version=window.version,
+        committed_revision=revision,
+    )
     rebuild_window(window, revision)
     increment("calendar.window.updated")
     event(
@@ -117,16 +147,20 @@ def add_override(org_key, resource_key, window_id, data):
     window = MaintenanceWindow.objects.select_for_update().get(
         organization=org, resource=resource, window_id=window_id
     )
+    if int(data.get("version", -1)) != window.version:
+        raise VersionConflict("version conflict")
+    revision = increment_revision(org, resource)
     Override.objects.create(
         window=window,
         original_start=data.get("original_start", data["start"]),
         action=data["action"],
         start=data["start"],
         end=data["end"],
+        window_version=window.version + 1,
+        committed_revision=revision,
     )
     window.version += 1
     window.save(update_fields=["version"])
-    revision = increment_revision(org, resource)
     rebuild_window(window, revision)
     increment("calendar.override.created")
     event(

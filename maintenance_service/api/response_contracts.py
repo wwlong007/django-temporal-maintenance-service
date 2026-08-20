@@ -10,6 +10,7 @@ class WindowResponse:
     rule: dict
     exceptions: dict
     priority: int
+    effective_from: datetime
     version: int
     calendar_revision: int
 
@@ -25,6 +26,7 @@ def window_response(window, revision):
         window.rule,
         window.exceptions,
         window.priority,
+        window.effective_from,
         window.version,
         revision,
     ).as_dict()

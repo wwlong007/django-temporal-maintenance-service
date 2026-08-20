@@ -24,6 +24,7 @@ class AvailabilityQuery:
     timezone: str
     cursor: str | None = None
     page_size: int = DEFAULT_PAGE_SIZE
+    revision: int | None = None
 
     def __post_init__(self):
         if self.end <= self.start:
@@ -40,6 +41,7 @@ class CursorState:
     offset: int
     query_start: str
     query_end: str
+    timezone: str
 
 
 def parse_query(params) -> AvailabilityQuery:
@@ -49,8 +51,21 @@ def parse_query(params) -> AvailabilityQuery:
         raise InvalidSchedule("from and to must be ISO-8601 timestamps")
     page_size = validate_limit(params.get("limit", DEFAULT_PAGE_SIZE))
     AvailabilityRange(start, end)
+    requested_revision = params.get("revision")
+    if requested_revision is not None:
+        try:
+            requested_revision = int(requested_revision)
+        except (TypeError, ValueError) as exc:
+            raise InvalidSchedule("revision must be an integer") from exc
+        if requested_revision < 0:
+            raise InvalidSchedule("revision cannot be negative")
     return AvailabilityQuery(
-        start, end, params.get("timezone", "UTC"), params.get("cursor"), page_size
+        start,
+        end,
+        params.get("timezone", "UTC"),
+        params.get("cursor"),
+        page_size,
+        requested_revision,
     )
 
 
@@ -61,6 +76,7 @@ def encode_cursor(state: CursorState) -> str:
             "offset": state.offset,
             "from": state.query_start,
             "to": state.query_end,
+            "timezone": state.timezone,
         },
         separators=(",", ":"),
         sort_keys=True,
@@ -79,6 +95,7 @@ def decode_cursor(value: str | None, query: AvailabilityQuery, revision: int) ->
             int(payload["offset"]),
             payload["from"],
             payload["to"],
+            payload["timezone"],
         )
     except Exception as exc:
         raise InvalidSchedule("cursor is invalid") from exc
@@ -89,6 +106,8 @@ def decode_cursor(value: str | None, query: AvailabilityQuery, revision: int) ->
         or state.query_end != query.end.isoformat()
     ):
         raise InvalidSchedule("cursor belongs to another query")
+    if state.timezone != query.timezone:
+        raise InvalidSchedule("cursor belongs to another timezone")
     if state.offset < 0:
         raise InvalidSchedule("cursor offset is invalid")
     return state.offset
@@ -132,6 +151,7 @@ def build_snapshot(rows: Iterable[tuple], query: AvailabilityQuery, revision: in
                 offset + query.page_size,
                 query.start.isoformat(),
                 query.end.isoformat(),
+                query.timezone,
             )
         )
     return {

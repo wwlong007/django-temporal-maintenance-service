@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Mapping, Any
 from maintenance_service.domain.errors import InvalidSchedule
 from maintenance_service.domain.rule_validation import validate_window_payload
+from maintenance_service.domain.effective_time import parse_instant
 
 
 @dataclass(frozen=True)
@@ -16,7 +17,9 @@ class RequestContext:
 
 
 def window_create(payload: Mapping[str, Any]):
-    return validate_window_payload(payload)
+    validated = validate_window_payload(payload)
+    validated["effective_from"] = parse_instant(validated["effective_from"])
+    return validated
 
 
 def window_patch(payload: Mapping[str, Any]):
@@ -36,11 +39,18 @@ def window_patch(payload: Mapping[str, Any]):
         "exceptions",
         "priority",
         "active",
+        "effective_from",
     }
     unknown = set(payload) - allowed
     if unknown:
         raise InvalidSchedule("unknown update fields: " + ", ".join(sorted(unknown)))
-    return {**payload, "version": version}
+    if "effective_from" not in payload:
+        raise InvalidSchedule("effective_from is required")
+    return {
+        **payload,
+        "version": version,
+        "effective_from": parse_instant(payload["effective_from"]),
+    }
 
 
 def override_create(payload):
@@ -49,7 +59,13 @@ def override_create(payload):
         raise InvalidSchedule("override action is invalid")
     if "start" not in payload or "end" not in payload:
         raise InvalidSchedule("override needs start and end")
-    return {**payload, "action": action}
+    try:
+        version = int(payload.get("version"))
+    except (TypeError, ValueError) as exc:
+        raise InvalidSchedule("version is required") from exc
+    if version < 1:
+        raise InvalidSchedule("version must be positive")
+    return {**payload, "action": action, "version": version}
 
 
 def availability_params(query):
@@ -57,7 +73,7 @@ def availability_params(query):
         raise InvalidSchedule("from and to are required")
     return {
         key: query.get(key)
-        for key in ("from", "to", "timezone", "cursor", "limit")
+        for key in ("from", "to", "timezone", "cursor", "limit", "revision")
         if query.get(key) is not None
     }
 

@@ -100,7 +100,7 @@ def validate_rule(payload: Mapping[str, Any]) -> ValidatedRule:
 
 
 def validate_window_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
-    required = ("window_id", "timezone", "rule")
+    required = ("window_id", "timezone", "rule", "effective_from")
     missing = [name for name in required if name not in payload]
     if missing:
         raise InvalidSchedule("missing required fields: " + ", ".join(missing))
@@ -119,4 +119,5 @@ def validate_window_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
         "rule": rule.as_dict(),
         "exceptions": payload.get("exceptions", {}),
         "priority": priority,
+        "effective_from": _timestamp(payload["effective_from"], "effective_from"),
     }

@@ -118,10 +118,14 @@ class ProjectionSnapshotReader:
         resource_key: str,
         start: datetime,
         end: datetime,
+        revision: int | None = None,
     ) -> ProjectionRead:
         scope = self.scope(organization_key, resource_key)
-        revision = self.revision(scope)
-        return ProjectionRead(scope, revision, self.rows(scope, start, end, revision))
+        current = self.revision(scope)
+        selected = current if revision is None else revision
+        if selected < 0 or selected > current:
+            raise InvalidSchedule("calendar revision is unavailable")
+        return ProjectionRead(scope, selected, self.rows(scope, start, end, selected))
 
     def read_many(
         self,
