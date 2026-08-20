@@ -8,6 +8,7 @@ class WindowSerializer(serializers.Serializer):
     rule = serializers.DictField(required=False)
     exceptions = serializers.DictField(required=False)
     priority = serializers.IntegerField(required=False)
+    active = serializers.BooleanField(required=False)
     effective_from = serializers.DateTimeField(required=False)
     version = serializers.IntegerField(required=False)
 
