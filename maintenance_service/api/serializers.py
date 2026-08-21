@@ -2,6 +2,8 @@ from datetime import datetime
 
 from rest_framework import serializers
 
+from .fields import OffsetDateTimeField, WindowIdField, validate_operation_envelope
+
 
 def has_offset(value):
     if not isinstance(value, str):
@@ -14,8 +16,8 @@ def has_offset(value):
 
 
 class WindowCreateSerializer(serializers.Serializer):
-    window_id = serializers.CharField()
-    effective_from = serializers.DateTimeField()
+    window_id = WindowIdField()
+    effective_from = OffsetDateTimeField()
     timezone = serializers.CharField()
     rule = serializers.DictField()
     priority = serializers.IntegerField()
@@ -29,7 +31,7 @@ class WindowCreateSerializer(serializers.Serializer):
 
 class WindowPatchSerializer(serializers.Serializer):
     version = serializers.IntegerField(min_value=1)
-    effective_from = serializers.DateTimeField()
+    effective_from = OffsetDateTimeField()
     timezone = serializers.CharField(required=False)
     rule = serializers.DictField(required=False)
     priority = serializers.IntegerField(required=False)
@@ -69,6 +71,7 @@ class WindowBatchSerializer(serializers.Serializer):
         validated = []
         seen = set()
         for operation in operations:
+            validate_operation_envelope(operation)
             operation_type = operation.get("type")
             window_id = operation.get("window_id")
             if operation_type not in {"create", "patch"} or not window_id:
