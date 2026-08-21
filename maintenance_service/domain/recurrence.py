@@ -1,41 +1,39 @@
-from datetime import timedelta
-from dateutil.rrule import rrule, WEEKLY, MONTHLY, MO, TU, WE, TH, FR, SA, SU
-from .timezone_policy import resolve_local, as_utc
-from .errors import InvalidSchedule
-from .rule_validation import validate_rule
-from .recurrence_limits import preflight, enforce_limit
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
-WEEKDAYS = {"MO": MO, "TU": TU, "WE": WE, "TH": TH, "FR": FR, "SA": SA, "SU": SU}
+from .amendments import parse_local
 
 
-def expand(rule, timezone_name, start, end):
-    rule = validate_rule(rule).as_dict()
-    preflight(rule, start, end)
-    freq_name = rule.get("frequency", "weekly").lower()
-    freq = (
-        WEEKLY if freq_name == "weekly" else MONTHLY if freq_name == "monthly" else None
-    )
-    if freq is None:
-        raise InvalidSchedule("frequency must be weekly or monthly")
-    local_start = resolve_local(rule["start"], timezone_name)
-    duration = timedelta(minutes=int(rule["duration_minutes"]))
-    kwargs = {
-        "freq": freq,
-        "dtstart": local_start,
-        "interval": int(rule.get("interval", 1)),
-    }
-    if rule.get("count") is not None:
-        kwargs["count"] = int(rule["count"])
-    if rule.get("until"):
-        kwargs["until"] = resolve_local(rule["until"], timezone_name)
-    if freq == WEEKLY:
-        days = tuple(WEEKDAYS[d] for d in rule.get("weekdays", []))
-        if days:
-            kwargs["byweekday"] = days
-    lower = start.astimezone(local_start.tzinfo)
-    upper = end.astimezone(local_start.tzinfo)
-    occurrences = rrule(**kwargs).between(lower, upper, inc=True)
-    return enforce_limit(
-        ((as_utc(item), as_utc(item + duration)) for item in occurrences),
-        preflight(rule, start, end),
-    )
+WEEKDAY_NUMBER = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+
+
+def expand_weekly(state, search_start, search_end):
+    rule = state["rule"]
+    zone = ZoneInfo(state["timezone"])
+    local_start = parse_local(rule["start"])
+    until = parse_local(rule["until"]) if "until" in rule else None
+    count = rule.get("count")
+    weekdays = {WEEKDAY_NUMBER[value] for value in rule["weekdays"]}
+    interval = rule["interval"]
+    cursor = local_start.date()
+    emitted = 0
+    results = []
+    local_limit = search_end.astimezone(zone).date() + timedelta(days=8)
+    while cursor <= local_limit:
+        candidate = datetime.combine(cursor, local_start.time())
+        week = (cursor - local_start.date()).days // 7
+        eligible = cursor.weekday() in weekdays and week >= 0 and week % interval == 0
+        if eligible and candidate >= local_start and (until is None or candidate <= until):
+            emitted += 1
+            if count is not None and emitted > count:
+                break
+            start = candidate.replace(tzinfo=zone).astimezone(timezone.utc)
+            end = (candidate + timedelta(minutes=rule["duration_minutes"])).replace(
+                tzinfo=zone
+            ).astimezone(timezone.utc)
+            if start < search_end and end > search_start:
+                results.append((start, end))
+        if until is not None and candidate > until:
+            break
+        cursor += timedelta(days=1)
+    return results
