@@ -56,3 +56,41 @@ class CalendarApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["calendar_revision"], 0)
         self.assertTrue(response.data["intervals"][0]["available"])
+
+    def test_batch_accepts_multiple_window_operations(self):
+        response = self.client.post(
+            f"{self.endpoint}/maintenance-windows/batch",
+            {
+                "operations": [
+                    {
+                        "type": "create",
+                        "window_id": "database",
+                        "effective_from": "2026-01-01T00:00:00Z",
+                        "timezone": "UTC",
+                        "rule": {
+                            "start": "2026-01-05T01:00:00",
+                            "weekdays": ["MO"],
+                            "interval": 1,
+                            "duration_minutes": 60,
+                        },
+                        "priority": 10,
+                    },
+                    {
+                        "type": "create",
+                        "window_id": "network",
+                        "effective_from": "2026-01-01T00:00:00Z",
+                        "timezone": "UTC",
+                        "rule": {
+                            "start": "2026-01-05T03:00:00",
+                            "weekdays": ["MO"],
+                            "interval": 1,
+                            "duration_minutes": 30,
+                        },
+                        "priority": 5,
+                    },
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(response.data["results"]), 2)

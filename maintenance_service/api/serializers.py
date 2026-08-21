@@ -58,3 +58,31 @@ class AvailabilitySerializer(serializers.Serializer):
         if (end - start).total_seconds() > 366 * 86400:
             raise serializers.ValidationError("range is too long")
         return attrs
+
+
+class WindowBatchSerializer(serializers.Serializer):
+    operations = serializers.ListField(
+        child=serializers.DictField(), min_length=1, max_length=32
+    )
+
+    def validate_operations(self, operations):
+        validated = []
+        seen = set()
+        for operation in operations:
+            operation_type = operation.get("type")
+            window_id = operation.get("window_id")
+            if operation_type not in {"create", "patch"} or not window_id:
+                raise serializers.ValidationError("invalid batch operation")
+            if window_id in seen:
+                raise serializers.ValidationError("a window may appear only once")
+            seen.add(window_id)
+            payload = {key: value for key, value in operation.items() if key != "type"}
+            serializer_class = (
+                WindowCreateSerializer if operation_type == "create" else WindowPatchSerializer
+            )
+            nested = serializer_class(data=payload)
+            nested.is_valid(raise_exception=True)
+            validated.append(
+                {"type": operation_type, **nested.validated_data}
+            )
+        return validated

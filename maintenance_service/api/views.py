@@ -2,10 +2,16 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from maintenance_service.application.batches import commit_batch
 from maintenance_service.application.commands import create_window, patch_window
 from maintenance_service.application.queries import availability
 
-from .serializers import AvailabilitySerializer, WindowCreateSerializer, WindowPatchSerializer
+from .serializers import (
+    AvailabilitySerializer,
+    WindowBatchSerializer,
+    WindowCreateSerializer,
+    WindowPatchSerializer,
+)
 
 
 class WindowCollectionView(APIView):
@@ -26,6 +32,18 @@ class WindowDetailView(APIView):
             patch_window(
                 organization, resource, window_id, serializer.validated_data
             )
+        )
+
+
+class WindowBatchView(APIView):
+    def post(self, request, organization, resource):
+        serializer = WindowBatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(
+            commit_batch(
+                organization, resource, serializer.validated_data["operations"]
+            ),
+            status=status.HTTP_201_CREATED,
         )
 
 

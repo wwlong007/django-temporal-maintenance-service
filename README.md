@@ -1,8 +1,8 @@
 # Temporal Maintenance Service
 
-This Django service stores IANA-time-zone weekly maintenance rules for organization-scoped resources. Window changes have an effective time and a resource calendar revision, allowing availability to be read at a previously committed revision.
+This Django service stores IANA-time-zone weekly maintenance rules for organization-scoped resources. Window changes have an effective time and a resource calendar revision, allowing availability to be read at a previously committed revision. A batch endpoint accepts several same-scope window operations as one requested calendar change.
 
-The API exposes maintenance-window creation and patching plus availability reads under `/api/v1/organizations/{organization}/resources/{resource}/`.
+The API exposes maintenance-window creation, patching, batch submission, and availability reads under `/api/v1/organizations/{organization}/resources/{resource}/`.
 
 ## Development
 

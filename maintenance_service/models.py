@@ -53,6 +53,13 @@ class WindowGeneration(models.Model):
     changes = models.JSONField(default=dict)
     window_version = models.PositiveIntegerField()
     committed_revision = models.PositiveIntegerField()
+    commit = models.ForeignKey(
+        "CalendarCommit",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="generations",
+    )
 
     class Meta:
         constraints = [
@@ -84,4 +91,49 @@ class CalendarRevision(models.Model):
             models.UniqueConstraint(
                 fields=["organization", "resource"], name="revision_scope"
             )
+        ]
+
+
+class CalendarCommit(models.Model):
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="calendar_commits"
+    )
+    resource = models.ForeignKey(
+        Resource, on_delete=models.CASCADE, related_name="calendar_commits"
+    )
+    revision = models.PositiveIntegerField()
+    expected_operations = models.PositiveSmallIntegerField(default=1)
+    status = models.CharField(max_length=16, default="published")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "resource", "revision"],
+                name="calendar_commit_scope_revision",
+            )
+        ]
+
+
+class CalendarCommitOperation(models.Model):
+    commit = models.ForeignKey(
+        CalendarCommit, on_delete=models.CASCADE, related_name="operations"
+    )
+    window = models.ForeignKey(
+        MaintenanceWindow, on_delete=models.CASCADE, related_name="commit_operations"
+    )
+    position = models.PositiveSmallIntegerField()
+    operation_type = models.CharField(max_length=12)
+    window_version = models.PositiveIntegerField()
+    effective_from = models.DateTimeField()
+    changes = models.JSONField(default=dict)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["commit", "position"], name="calendar_commit_operation_position"
+            ),
+            models.UniqueConstraint(
+                fields=["commit", "window"], name="calendar_commit_operation_window"
+            ),
         ]

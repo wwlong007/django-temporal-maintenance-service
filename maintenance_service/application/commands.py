@@ -5,31 +5,20 @@ from django.shortcuts import get_object_or_404
 
 from maintenance_service.api.errors import Conflict
 from maintenance_service.domain.amendments import apply_changes, snapshots, validate_state
-from maintenance_service.models import (
-    CalendarRevision,
-    MaintenanceWindow,
-    Organization,
-    Resource,
-    WindowGeneration,
-)
+from maintenance_service.models import MaintenanceWindow
+from maintenance_service.repositories.commits import record_commit
+from maintenance_service.repositories.ledger import append_generation
+from maintenance_service.repositories.projections import update_window
+from maintenance_service.repositories.scopes import get_or_create_scope
 
 
 def get_scope(organization_key, resource_key):
-    organization, _ = Organization.objects.get_or_create(
-        key=organization_key, defaults={"name": organization_key}
-    )
-    resource, _ = Resource.objects.get_or_create(
-        organization=organization,
-        key=resource_key,
-        defaults={"name": resource_key},
-    )
+    organization, resource, _ = get_or_create_scope(organization_key, resource_key)
     return organization, resource
 
 
 def next_revision(organization, resource):
-    row, _ = CalendarRevision.objects.get_or_create(
-        organization=organization, resource=resource
-    )
+    _, _, row = get_or_create_scope(organization.key, resource.key)
     row.value += 1
     row.save(update_fields=["value", "updated_at"])
     return row.value
@@ -63,13 +52,8 @@ def create_window(organization_key, resource_key, data):
         **state,
     )
     revision = next_revision(organization, resource)
-    WindowGeneration.objects.create(
-        window=window,
-        effective_from=data["effective_from"],
-        changes=state,
-        window_version=1,
-        committed_revision=revision,
-    )
+    generation = append_generation(window, data["effective_from"], state, 1, revision)
+    record_commit(organization, resource, revision, window, generation, "create")
     return response(window, revision)
 
 
@@ -96,18 +80,9 @@ def patch_window(organization_key, resource_key, window_id, data):
     }
     state = validate_state(apply_changes(inherited, changes))
     revision = next_revision(organization, resource)
-    window.version += 1
-    window.effective_from = data["effective_from"]
-    window.timezone = state["timezone"]
-    window.rule = state["rule"]
-    window.priority = state["priority"]
-    window.active = state["active"]
-    window.save()
-    WindowGeneration.objects.create(
-        window=window,
-        effective_from=data["effective_from"],
-        changes=state,
-        window_version=window.version,
-        committed_revision=revision,
+    update_window(window, state, data["effective_from"])
+    generation = append_generation(
+        window, data["effective_from"], state, window.version, revision
     )
+    record_commit(organization, resource, revision, window, generation, "patch")
     return response(window, revision)
